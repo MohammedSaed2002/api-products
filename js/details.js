@@ -1,30 +1,28 @@
 // ===== details.js =====
 
-// ===== Get Product ID from URL =====
 function getProductId() {
   const params = new URLSearchParams(window.location.search);
   return params.get("id");
 }
 
-// ===== Fetch Product =====
 async function fetchProduct(id) {
   try {
     const res = await fetch(`https://dummyjson.com/products/${id}`);
-    if (!res.ok) throw new Error("Product not found");
+    if (!res.ok) throw new Error("Not found");
     const product = await res.json();
     renderProduct(product);
   } catch (err) {
     document.getElementById("loader").innerHTML =
-      `<p class="text-danger text-center py-5">Product not found.</p>`;
+      `<div class="text-center py-5">
+        <p style="font-size:3rem;">😕</p>
+        <p class="text-danger fw-bold">Product not found.</p>
+        <a href="index.html" class="btn btn-dark mt-2">Go Home</a>
+      </div>`;
   }
 }
 
-// ===== Render Product =====
 function renderProduct(product) {
-  // Update page title
   document.title = `${product.title} | ShopAPI`;
-
-  // Breadcrumb
   document.getElementById("breadcrumb-name").textContent = product.title;
 
   // Main Image
@@ -47,46 +45,34 @@ function renderProduct(product) {
     thumbsContainer.appendChild(thumb);
   });
 
-  // Category
+  // Info
   document.getElementById("product-category").textContent = product.category.replace(/-/g, " ");
-
-  // Name
   document.getElementById("product-name").textContent = product.title;
 
-  // Rating
   const stars = renderStars(product.rating);
   document.getElementById("product-rating").textContent = `${stars} ${product.rating}/5`;
 
-  // Stock
   const stockEl = document.getElementById("product-stock");
   if (product.stock > 0) {
-    stockEl.textContent = `In Stock (${product.stock})`;
+    stockEl.textContent = `✓ In Stock (${product.stock})`;
     stockEl.className = "badge bg-success";
   } else {
-    stockEl.textContent = "Out of Stock";
+    stockEl.textContent = "✗ Out of Stock";
     stockEl.className = "badge bg-danger";
   }
 
-  // Price
   document.getElementById("product-price").textContent = `$${product.price}`;
-
-  // Description
   document.getElementById("product-description").textContent = product.description;
-
-  // Meta
   document.getElementById("meta-brand").textContent = product.brand || "—";
   document.getElementById("meta-sku").textContent = product.sku || "—";
   document.getElementById("meta-warranty").textContent = product.warrantyInformation || "—";
 
-  // Reviews
   renderReviews(product.reviews || []);
 
-  // Show content, hide loader
   document.getElementById("loader").classList.add("d-none");
   document.getElementById("product-details").classList.remove("d-none");
 }
 
-// ===== Render Reviews =====
 function renderReviews(reviews) {
   const container = document.getElementById("reviews-container");
 
@@ -98,18 +84,15 @@ function renderReviews(reviews) {
   reviews.forEach((review) => {
     const stars = renderStars(review.rating);
     const date = new Date(review.date).toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
+      year: "numeric", month: "short", day: "numeric",
     });
-
     const col = document.createElement("div");
     col.className = "col-md-6 col-lg-4";
     col.innerHTML = `
       <div class="review-card">
-        <div class="d-flex justify-content-between align-items-center mb-2">
+        <div class="d-flex justify-content-between align-items-center mb-1">
           <span class="reviewer-name">${review.reviewerName}</span>
-          <span class="text-warning">${stars}</span>
+          <span style="color:var(--star);">${stars}</span>
         </div>
         <p class="review-date">${date}</p>
         <p class="review-comment mb-0">${review.comment}</p>
@@ -119,7 +102,6 @@ function renderReviews(reviews) {
   });
 }
 
-// ===== Stars Helper =====
 function renderStars(rating) {
   const full = Math.floor(rating);
   const half = rating % 1 >= 0.5 ? 1 : 0;
@@ -127,11 +109,21 @@ function renderStars(rating) {
   return "★".repeat(full) + (half ? "½" : "") + "☆".repeat(empty);
 }
 
-// ===== Init =====
+// Scroll To Top
+const scrollBtn = document.getElementById("scroll-top");
+window.addEventListener("scroll", () => {
+  scrollBtn.classList.toggle("visible", window.scrollY > 400);
+});
+scrollBtn.addEventListener("click", () => window.scrollTo({ top: 0, behavior: "smooth" }));
+
+// Init
 const productId = getProductId();
 if (productId) {
   fetchProduct(productId);
 } else {
   document.getElementById("loader").innerHTML =
-    `<p class="text-danger text-center py-5">No product ID provided.</p>`;
+    `<div class="text-center py-5">
+      <p class="text-danger">No product ID provided.</p>
+      <a href="index.html" class="btn btn-dark mt-2">Go Home</a>
+    </div>`;
 }

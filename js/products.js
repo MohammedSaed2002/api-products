@@ -1,60 +1,45 @@
 // ===== products.js =====
 
-const LIMIT = 8; // products per page
+const LIMIT = 8;
 let currentPage = 1;
 let currentCategory = "";
 let currentSort = "";
 let totalProducts = 0;
 
-// ===== Read URL Params =====
 function getParams() {
   const params = new URLSearchParams(window.location.search);
   currentCategory = params.get("category") || "";
 }
 
-// ===== Build API URL =====
 function buildUrl(page) {
   const skip = (page - 1) * LIMIT;
-  let url = "";
-
   if (currentSort) {
     const [sortBy, order] = currentSort.split("-");
     if (currentCategory) {
-      // sort + category: fetch all then sort client-side (API limitation)
-      url = `https://dummyjson.com/products/category/${currentCategory}?limit=0`;
-    } else {
-      url = `https://dummyjson.com/products?limit=${LIMIT}&skip=${skip}&sortBy=${sortBy}&order=${order}`;
+      return `https://dummyjson.com/products/category/${currentCategory}?limit=0`;
     }
-  } else {
-    if (currentCategory) {
-      url = `https://dummyjson.com/products/category/${currentCategory}?limit=0`;
-    } else {
-      url = `https://dummyjson.com/products?limit=${LIMIT}&skip=${skip}`;
-    }
+    return `https://dummyjson.com/products?limit=${LIMIT}&skip=${skip}&sortBy=${sortBy}&order=${order}`;
   }
-
-  return url;
+  if (currentCategory) {
+    return `https://dummyjson.com/products/category/${currentCategory}?limit=0`;
+  }
+  return `https://dummyjson.com/products?limit=${LIMIT}&skip=${skip}`;
 }
 
-// ===== Fetch Products =====
 async function fetchProducts(page = 1) {
   currentPage = page;
-  showLoader();
-
+  showSkeleton();
   try {
     const url = buildUrl(page);
     const res = await fetch(url);
     const data = await res.json();
-
     let products = data.products;
 
-    // Client-side sort for category pages
     if (currentSort && currentCategory) {
       const [sortBy, order] = currentSort.split("-");
       products = sortProducts(products, sortBy, order);
     }
 
-    // Client-side pagination for category pages
     if (currentCategory) {
       totalProducts = products.length;
       const start = (page - 1) * LIMIT;
@@ -65,6 +50,7 @@ async function fetchProducts(page = 1) {
 
     renderProducts(products);
     renderPagination(totalProducts, page);
+    renderCount(page, products.length, totalProducts);
   } catch (err) {
     document.getElementById("products-container").innerHTML =
       `<p class="text-center text-danger py-5">Failed to load products.</p>`;
@@ -81,23 +67,30 @@ function sortProducts(products, sortBy, order) {
   });
 }
 
-// ===== Render =====
 function renderProducts(products) {
   const container = document.getElementById("products-container");
   container.innerHTML = "";
 
   if (!products.length) {
-    container.innerHTML = `<p class="text-center text-muted py-5">No products found.</p>`;
+    container.innerHTML = `
+      <div class="col-12 text-center py-5">
+        <p style="font-size:3rem;">🔍</p>
+        <p class="text-muted">No products found in this category.</p>
+      </div>`;
     return;
   }
 
   products.forEach((product) => {
     const stars = renderStars(product.rating);
+    const discount = product.discountPercentage ? Math.round(product.discountPercentage) : null;
     const col = document.createElement("div");
     col.className = "col-6 col-sm-6 col-md-4 col-lg-3";
     col.innerHTML = `
       <a href="details.html?id=${product.id}" class="product-card">
-        <img src="${product.thumbnail}" alt="${product.title}" loading="lazy" />
+        ${discount ? `<span class="discount-badge">-${discount}%</span>` : ""}
+        <div class="img-wrapper">
+          <img src="${product.thumbnail}" alt="${product.title}" loading="lazy" />
+        </div>
         <div class="card-body">
           <p class="product-title">${product.title}</p>
           <div class="d-flex justify-content-between align-items-center">
@@ -118,61 +111,75 @@ function renderStars(rating) {
   return "★".repeat(full) + (half ? "½" : "") + "☆".repeat(empty);
 }
 
-// ===== Pagination =====
+function renderCount(page, shown, total) {
+  const start = (page - 1) * LIMIT + 1;
+  const end = start + shown - 1;
+  const el = document.getElementById("total-count");
+  if (el) el.textContent = `Showing ${start}–${end} of ${total} products`;
+}
+
 function renderPagination(total, activePage) {
   const totalPages = Math.ceil(total / LIMIT);
   const ul = document.getElementById("pagination");
   ul.innerHTML = "";
-
   if (totalPages <= 1) return;
 
-  // Prev
-  ul.innerHTML += `
-    <li class="page-item ${activePage === 1 ? "disabled" : ""}">
-      <a class="page-link" href="#" onclick="goToPage(${activePage - 1})">‹ Prev</a>
-    </li>
-  `;
+  ul.innerHTML += `<li class="page-item ${activePage === 1 ? "disabled" : ""}">
+    <a class="page-link" href="#" onclick="goToPage(event,${activePage - 1})">‹ Prev</a></li>`;
 
-  // Pages
-  for (let i = 1; i <= totalPages; i++) {
-    ul.innerHTML += `
-      <li class="page-item ${i === activePage ? "active" : ""}">
-        <a class="page-link" href="#" onclick="goToPage(${i})">${i}</a>
-      </li>
-    `;
+  const range = 2;
+  const start = Math.max(1, activePage - range);
+  const end = Math.min(totalPages, activePage + range);
+
+  if (start > 1) {
+    ul.innerHTML += `<li class="page-item"><a class="page-link" href="#" onclick="goToPage(event,1)">1</a></li>`;
+    if (start > 2) ul.innerHTML += `<li class="page-item disabled"><span class="page-link">…</span></li>`;
   }
 
-  // Next
-  ul.innerHTML += `
-    <li class="page-item ${activePage === totalPages ? "disabled" : ""}">
-      <a class="page-link" href="#" onclick="goToPage(${activePage + 1})">Next ›</a>
-    </li>
-  `;
+  for (let i = start; i <= end; i++) {
+    ul.innerHTML += `<li class="page-item ${i === activePage ? "active" : ""}">
+      <a class="page-link" href="#" onclick="goToPage(event,${i})">${i}</a></li>`;
+  }
+
+  if (end < totalPages) {
+    if (end < totalPages - 1) ul.innerHTML += `<li class="page-item disabled"><span class="page-link">…</span></li>`;
+    ul.innerHTML += `<li class="page-item"><a class="page-link" href="#" onclick="goToPage(event,${totalPages})">${totalPages}</a></li>`;
+  }
+
+  ul.innerHTML += `<li class="page-item ${activePage === totalPages ? "disabled" : ""}">
+    <a class="page-link" href="#" onclick="goToPage(event,${activePage + 1})">Next ›</a></li>`;
 }
 
-function goToPage(page) {
-  event.preventDefault();
-  if (page < 1) return;
+function goToPage(e, page) {
+  e.preventDefault();
+  const totalPages = Math.ceil(totalProducts / LIMIT);
+  if (page < 1 || page > totalPages) return;
   window.scrollTo({ top: 0, behavior: "smooth" });
   fetchProducts(page);
 }
 
-function showLoader() {
-  document.getElementById("products-container").innerHTML = `
-    <div class="col-12 text-center py-5">
-      <div class="spinner-border text-dark" role="status"></div>
+function showSkeleton() {
+  document.getElementById("products-container").innerHTML = Array(8).fill(`
+    <div class="col-6 col-sm-6 col-md-4 col-lg-3">
+      <div class="skeleton-card">
+        <div class="skeleton skeleton-img"></div>
+        <div class="skeleton-body">
+          <div class="skeleton skeleton-line mb-2"></div>
+          <div class="skeleton skeleton-line short"></div>
+        </div>
+      </div>
     </div>
-  `;
+  `).join("");
   document.getElementById("pagination").innerHTML = "";
+  const el = document.getElementById("total-count");
+  if (el) el.textContent = "";
 }
 
-// ===== Page Title =====
 function setPageTitle() {
   if (currentCategory) {
     const name = currentCategory.replace(/-/g, " ");
     document.title = `${name} | ShopAPI`;
-    document.getElementById("page-title").textContent =
-      name.charAt(0).toUpperCase() + name.slice(1);
+    document.getElementById("page-title").textContent = name.charAt(0).toUpperCase() + name.slice(1);
     document.getElementById("breadcrumb-category").textContent = name;
   } else {
     document.getElementById("page-title").textContent = "All Products";
@@ -180,13 +187,20 @@ function setPageTitle() {
   }
 }
 
-// ===== Sort Event =====
+// Scroll To Top
+const scrollBtn = document.getElementById("scroll-top");
+window.addEventListener("scroll", () => {
+  scrollBtn.classList.toggle("visible", window.scrollY > 400);
+});
+scrollBtn.addEventListener("click", () => window.scrollTo({ top: 0, behavior: "smooth" }));
+
+// Sort
 document.getElementById("sort-select").addEventListener("change", function () {
   currentSort = this.value;
   fetchProducts(1);
 });
 
-// ===== Init =====
+// Init
 getParams();
 setPageTitle();
 fetchProducts(1);
